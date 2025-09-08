@@ -45,6 +45,12 @@ class TPAK_Autoloader {
         'TPAK_Survey_Data'    => 'includes/class-survey-data.php',
         'TPAK_Audit_Entry'    => 'includes/class-audit-entry.php',
         'TPAK_Role_Manager'   => 'includes/class-role-manager.php',
+        
+        // Interfaces
+        'TPAK_API_Interface'  => 'includes/interface-api.php',
+        
+        // Workflow utilities
+        'TPAK_Workflow_Diagram' => 'includes/class-workflow-diagram.php',
     );
     
     /**

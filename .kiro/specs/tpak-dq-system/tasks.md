@@ -29,11 +29,17 @@
   - Implement TPAK_Roles class with methods to create custom user roles
   - Define capabilities for each role (interviewer_a, supervisor_b, examiner_c)
   - Create role assignment and permission checking functions
+
+
+
   - Write unit tests for role creation and capability verification
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
 - [ ] 4. Build comprehensive validation engine
   - Create TPAK_Validator class with validation methods for all data types
+
+
+
   - Implement API settings validation (URL, credentials, survey ID)
   - Create survey data structure validation functions
   - Implement user input validation with sanitization
