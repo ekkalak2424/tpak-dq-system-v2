@@ -110,6 +110,7 @@ final class TPAK_DQ_System {
         // Admin components (only in admin)
         if (is_admin()) {
             TPAK_Admin_Menu::get_instance();
+            TPAK_Admin_Settings::get_instance();
             TPAK_Meta_Boxes::get_instance();
             TPAK_Admin_Columns::get_instance();
         }

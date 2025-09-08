@@ -1,8 +1,8 @@
 <?php
 /**
- * Meta Boxes Class
+ * Meta Boxes Class (Placeholder)
  * 
- * Handles meta box registration and management
+ * Handles meta boxes for survey data editing
  * 
  * @package TPAK_DQ_System
  * @since 1.0.0
@@ -41,13 +41,6 @@ class TPAK_Meta_Boxes {
      * Constructor
      */
     private function __construct() {
-        add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
-    }
-    
-    /**
-     * Add meta boxes
-     */
-    public function add_meta_boxes() {
-        // Implementation will be added in Task 12
+        // Placeholder - will be implemented in Task 12
     }
 }

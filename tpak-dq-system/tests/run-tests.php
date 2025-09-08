@@ -44,6 +44,9 @@ class TPAK_Test_Runner {
         // Test survey data model
         $this->test_survey_data_model();
         
+        // Test notification system
+        $this->test_notification_system();
+        
         // Display results
         $this->display_results();
     }
@@ -185,6 +188,104 @@ class TPAK_Test_Runner {
                 $this->pass('Audit trail functionality works');
             } else {
                 $this->fail('Audit trail functionality failed');
+            }
+            
+        } catch (Exception $e) {
+            $this->fail('Exception: ' . $e->getMessage());
+        }
+        
+        $this->end_test();
+    }
+    
+    /**
+     * Test notification system
+     */
+    private function test_notification_system() {
+        $this->start_test('Notification System');
+        
+        try {
+            // Test instance creation
+            $notifications = TPAK_Notifications::get_instance();
+            
+            if ($notifications instanceof TPAK_Notifications) {
+                $this->pass('Notification instance created successfully');
+            } else {
+                $this->fail('Failed to create notification instance');
+                return;
+            }
+            
+            // Test settings
+            $settings = $notifications->get_notification_settings();
+            if (is_array($settings) && isset($settings['enabled'])) {
+                $this->pass('Notification settings accessible');
+            } else {
+                $this->fail('Notification settings not accessible');
+            }
+            
+            // Test enabled/disabled functionality
+            $original_state = $notifications->are_notifications_enabled();
+            $notifications->update_notification_settings(array('enabled' => false));
+            $disabled_state = $notifications->are_notifications_enabled();
+            $notifications->update_notification_settings(array('enabled' => true));
+            $enabled_state = $notifications->are_notifications_enabled();
+            
+            if (!$disabled_state && $enabled_state) {
+                $this->pass('Enable/disable functionality works');
+            } else {
+                $this->fail('Enable/disable functionality failed');
+            }
+            
+            // Test template generation
+            $test_data = array(
+                'user_name' => 'Test User',
+                'survey_id' => '12345',
+                'include_action_links' => true
+            );
+            
+            $template = $notifications->get_notification_template(TPAK_Notifications::TYPE_ASSIGNMENT, $test_data);
+            if (!empty($template) && strpos($template, '{user_name}') !== false) {
+                $this->pass('Template generation works');
+            } else {
+                $this->fail('Template generation failed');
+            }
+            
+            // Test HTML content type
+            $content_type = $notifications->set_html_content_type();
+            if ($content_type === 'text/html') {
+                $this->pass('HTML content type setting works');
+            } else {
+                $this->fail('HTML content type setting failed');
+            }
+            
+            // Test logging functionality
+            $notifications->clear_notification_log();
+            $notifications->clear_notification_errors();
+            
+            // Use reflection to test private methods
+            $reflection = new ReflectionClass($notifications);
+            
+            // Test notification logging
+            $log_method = $reflection->getMethod('log_notification_sent');
+            $log_method->setAccessible(true);
+            $log_method->invoke($notifications, 1, TPAK_Notifications::TYPE_ASSIGNMENT, 123, array());
+            
+            $log = $notifications->get_notification_log(1);
+            if (!empty($log)) {
+                $this->pass('Notification logging works');
+            } else {
+                $this->fail('Notification logging failed');
+            }
+            
+            // Test error logging
+            $error_method = $reflection->getMethod('log_error');
+            $error_method->setAccessible(true);
+            $error_method->invoke($notifications, 'Test error', array());
+            
+            $errors = $notifications->get_notification_errors(1);
+            if (!empty($errors)) {
+                $this->pass('Error logging works');
+            } else {
+                $this->fail('Error logging failed');
             }
             
         } catch (Exception $e) {

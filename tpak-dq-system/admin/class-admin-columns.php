@@ -1,8 +1,8 @@
 <?php
 /**
- * Admin Columns Class
+ * Admin Columns Class (Placeholder)
  * 
- * Handles custom admin columns for post types
+ * Handles custom columns in admin data tables
  * 
  * @package TPAK_DQ_System
  * @since 1.0.0
@@ -41,6 +41,6 @@ class TPAK_Admin_Columns {
      * Constructor
      */
     private function __construct() {
-        // Implementation will be added in Task 11
+        // Placeholder - will be implemented in Task 11
     }
 }

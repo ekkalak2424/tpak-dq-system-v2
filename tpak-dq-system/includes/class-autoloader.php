@@ -51,6 +51,9 @@ class TPAK_Autoloader {
         
         // Workflow utilities
         'TPAK_Workflow_Diagram' => 'includes/class-workflow-diagram.php',
+        
+        // Cron utilities
+        'TPAK_Cron_Monitor'   => 'includes/class-cron-monitor.php',
     );
     
     /**
