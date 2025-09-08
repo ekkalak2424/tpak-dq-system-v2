@@ -70,14 +70,40 @@ class TPAK_DQ_Uninstaller {
      * Remove custom user roles
      */
     private static function remove_user_roles() {
-        $roles = array(
-            'tpak_interviewer_a',
-            'tpak_supervisor_b',
-            'tpak_examiner_c'
-        );
-        
-        foreach ($roles as $role) {
-            remove_role($role);
+        // Use the roles class to properly remove roles and capabilities
+        if (class_exists('TPAK_Roles')) {
+            TPAK_Roles::get_instance()->remove_roles();
+        } else {
+            // Fallback manual removal
+            $roles = array(
+                'tpak_interviewer_a',
+                'tpak_supervisor_b',
+                'tpak_examiner_c'
+            );
+            
+            foreach ($roles as $role) {
+                remove_role($role);
+            }
+            
+            // Remove capabilities from administrator
+            $admin_role = get_role('administrator');
+            if ($admin_role) {
+                $admin_capabilities = array(
+                    'edit_tpak_survey_data',
+                    'read_tpak_survey_data',
+                    'delete_tpak_survey_data',
+                    'tpak_manage_settings',
+                    'tpak_import_data',
+                    'tpak_export_data',
+                    'tpak_manage_users',
+                    'tpak_view_all_data',
+                    'tpak_access_dashboard',
+                );
+                
+                foreach ($admin_capabilities as $cap) {
+                    $admin_role->remove_cap($cap);
+                }
+            }
         }
     }
     

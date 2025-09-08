@@ -44,6 +44,7 @@ class TPAK_Autoloader {
         'TPAK_Logger'         => 'includes/class-logger.php',
         'TPAK_Survey_Data'    => 'includes/class-survey-data.php',
         'TPAK_Audit_Entry'    => 'includes/class-audit-entry.php',
+        'TPAK_Role_Manager'   => 'includes/class-role-manager.php',
     );
     
     /**
