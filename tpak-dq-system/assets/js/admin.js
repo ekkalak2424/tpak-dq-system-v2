@@ -752,3 +752,746 @@
     window.TPAKAdmin = TPAKAdmin;
     
 })(jQuery);
+/**
+ 
+* TPAK Data Management Class
+ */
+function TPAKDataManager() {
+    var self = this;
+    var $ = jQuery;
+    
+    // Current state
+    this.currentPage = 1;
+    this.currentFilters = {
+        status: '',
+        search: '',
+        orderby: 'date',
+        order: 'DESC'
+    };
+    this.selectedItems = [];
+    
+    /**
+     * Initialize data management
+     */
+    this.init = function() {
+        this.bindEvents();
+        this.loadData();
+    };
+    
+    /**
+     * Bind event handlers
+     */
+    this.bindEvents = function() {
+        // Filter and search
+        $('#filter-button').on('click', this.applyFilters.bind(this));
+        $('#reset-filters').on('click', this.resetFilters.bind(this));
+        $('#search-input').on('keypress', function(e) {
+            if (e.which === 13) {
+                self.applyFilters();
+            }
+        });
+        
+        // Sorting
+        $('.sortable .sort-link').on('click', this.handleSort.bind(this));
+        
+        // Selection
+        $('#select-all').on('change', this.toggleSelectAll.bind(this));
+        $(document).on('change', '.item-checkbox', this.updateSelection.bind(this));
+        
+        // Bulk actions
+        $('#bulk-action-button').on('click', this.performBulkAction.bind(this));
+        $('#bulk-action-selector').on('change', this.toggleBulkActionButton.bind(this));
+        
+        // Row actions
+        $(document).on('click', '.view-data', this.viewData.bind(this));
+        $(document).on('click', '.edit-data', this.editData.bind(this));
+        $(document).on('click', '.workflow-action', this.performWorkflowAction.bind(this));
+        
+        // Modal events
+        $('.tpak-modal-close').on('click', this.closeModal.bind(this));
+        $('.tpak-modal').on('click', function(e) {
+            if (e.target === this) {
+                self.closeModal();
+            }
+        });
+        
+        // Tab switching in modal
+        $('.tpak-tab-link').on('click', this.switchModalTab.bind(this));
+        
+        // Data editing
+        $('#edit-data-button').on('click', this.enableDataEditing.bind(this));
+        $('#save-data-button').on('click', this.saveDataChanges.bind(this));
+        $('#cancel-edit-button').on('click', this.cancelDataEditing.bind(this));
+        
+        // Workflow action confirmation
+        $('#confirm-workflow-action').on('click', this.confirmWorkflowAction.bind(this));
+        
+        // Statistics card clicks
+        $('.tpak-stat-card').on('click', this.filterByStatus.bind(this));
+    };
+    
+    /**
+     * Load data table
+     */
+    this.loadData = function() {
+        $('#loading-indicator').show();
+        $('#data-table-body').empty();
+        
+        var requestData = {
+            action: 'tpak_load_data_table',
+            nonce: tpak_admin.nonce,
+            page: this.currentPage,
+            status: this.currentFilters.status,
+            search: this.currentFilters.search,
+            orderby: this.currentFilters.orderby,
+            order: this.currentFilters.order
+        };
+        
+        $.post(tpak_admin.ajax_url, requestData)
+            .done(function(response) {
+                if (response.success) {
+                    self.renderDataTable(response.data);
+                } else {
+                    self.showError(response.data || tpak_admin.strings.error);
+                }
+            })
+            .fail(function() {
+                self.showError(tpak_admin.strings.error);
+            })
+            .always(function() {
+                $('#loading-indicator').hide();
+            });
+    };
+    
+    /**
+     * Render data table
+     */
+    this.renderDataTable = function(data) {
+        var $tbody = $('#data-table-body');
+        $tbody.empty();
+        
+        if (data.data.length === 0) {
+            $tbody.append('<tr><td colspan="8" class="no-items">' + 
+                         'No data found matching your criteria.' + '</td></tr>');
+            $('#items-count').text('0 items');
+            return;
+        }
+        
+        $.each(data.data, function(index, item) {
+            var row = self.renderDataRow(item);
+            $tbody.append(row);
+        });
+        
+        // Update pagination and counts
+        this.renderPagination(data);
+        $('#items-count').text(data.total + ' items');
+        
+        // Reset selection
+        this.selectedItems = [];
+        $('#select-all').prop('checked', false);
+        this.toggleBulkActionButton();
+    };
+    
+    /**
+     * Render data row
+     */
+    this.renderDataRow = function(item) {
+        var statusClass = 'status-' + item.status.replace(/_/g, '-');
+        var actionsHtml = '';
+        
+        $.each(item.actions, function(action, config) {
+            actionsHtml += '<button type="button" class="button ' + config.class + ' workflow-action" ' +
+                          'data-action="' + action + '" data-id="' + item.id + '">' +
+                          config.label + '</button> ';
+        });
+        
+        return '<tr data-id="' + item.id + '">' +
+               '<th scope="row" class="check-column">' +
+               '<input type="checkbox" class="item-checkbox" value="' + item.id + '">' +
+               '</th>' +
+               '<td class="column-survey-id">' + this.escapeHtml(item.survey_id) + '</td>' +
+               '<td class="column-response-id">' + this.escapeHtml(item.response_id) + '</td>' +
+               '<td class="column-status">' +
+               '<span class="status-badge ' + statusClass + '">' + this.escapeHtml(item.status_label) + '</span>' +
+               '</td>' +
+               '<td class="column-assigned-user">' + this.escapeHtml(item.assigned_user) + '</td>' +
+               '<td class="column-date">' + this.formatDate(item.created_date) + '</td>' +
+               '<td class="column-modified">' + this.formatDate(item.last_modified) + '</td>' +
+               '<td class="column-actions">' + actionsHtml + '</td>' +
+               '</tr>';
+    };
+    
+    /**
+     * Render pagination
+     */
+    this.renderPagination = function(data) {
+        var $container = $('#pagination-container');
+        $container.empty();
+        
+        if (data.total_pages <= 1) {
+            return;
+        }
+        
+        var paginationHtml = '<span class="pagination-links">';
+        
+        // First page
+        if (this.currentPage > 1) {
+            paginationHtml += '<a class="first-page button" data-page="1">&laquo;</a>';
+            paginationHtml += '<a class="prev-page button" data-page="' + (this.currentPage - 1) + '">&lsaquo;</a>';
+        }
+        
+        // Page numbers
+        var startPage = Math.max(1, this.currentPage - 2);
+        var endPage = Math.min(data.total_pages, this.currentPage + 2);
+        
+        for (var i = startPage; i <= endPage; i++) {
+            if (i === this.currentPage) {
+                paginationHtml += '<span class="paging-input">' + i + '</span>';
+            } else {
+                paginationHtml += '<a class="page-numbers button" data-page="' + i + '">' + i + '</a>';
+            }
+        }
+        
+        // Last page
+        if (this.currentPage < data.total_pages) {
+            paginationHtml += '<a class="next-page button" data-page="' + (this.currentPage + 1) + '">&rsaquo;</a>';
+            paginationHtml += '<a class="last-page button" data-page="' + data.total_pages + '">&raquo;</a>';
+        }
+        
+        paginationHtml += '</span>';
+        
+        $container.html(paginationHtml);
+        
+        // Bind pagination events
+        $container.find('a').on('click', function(e) {
+            e.preventDefault();
+            self.currentPage = parseInt($(this).data('page'));
+            self.loadData();
+        });
+    };
+    
+    /**
+     * Apply filters
+     */
+    this.applyFilters = function() {
+        this.currentFilters.status = $('#status-filter').val();
+        this.currentFilters.search = $('#search-input').val();
+        this.currentPage = 1;
+        this.loadData();
+    };
+    
+    /**
+     * Reset filters
+     */
+    this.resetFilters = function() {
+        $('#status-filter').val('');
+        $('#search-input').val('');
+        this.currentFilters = {
+            status: '',
+            search: '',
+            orderby: 'date',
+            order: 'DESC'
+        };
+        this.currentPage = 1;
+        this.loadData();
+    };
+    
+    /**
+     * Handle sorting
+     */
+    this.handleSort = function(e) {
+        e.preventDefault();
+        
+        var $link = $(e.currentTarget);
+        var $th = $link.closest('th');
+        var orderby = $th.data('orderby');
+        
+        // Toggle order if same column
+        if (this.currentFilters.orderby === orderby) {
+            this.currentFilters.order = this.currentFilters.order === 'ASC' ? 'DESC' : 'ASC';
+        } else {
+            this.currentFilters.orderby = orderby;
+            this.currentFilters.order = 'ASC';
+        }
+        
+        // Update UI
+        $('.sortable').removeClass('asc desc');
+        $th.addClass(this.currentFilters.order.toLowerCase());
+        
+        this.currentPage = 1;
+        this.loadData();
+    };
+    
+    /**
+     * Toggle select all
+     */
+    this.toggleSelectAll = function() {
+        var checked = $('#select-all').prop('checked');
+        $('.item-checkbox').prop('checked', checked);
+        this.updateSelection();
+    };
+    
+    /**
+     * Update selection
+     */
+    this.updateSelection = function() {
+        this.selectedItems = [];
+        $('.item-checkbox:checked').each(function() {
+            self.selectedItems.push(parseInt($(this).val()));
+        });
+        
+        $('#select-all').prop('checked', 
+            $('.item-checkbox').length > 0 && 
+            $('.item-checkbox:checked').length === $('.item-checkbox').length
+        );
+        
+        this.toggleBulkActionButton();
+    };
+    
+    /**
+     * Toggle bulk action button
+     */
+    this.toggleBulkActionButton = function() {
+        var hasSelection = this.selectedItems.length > 0;
+        var hasAction = $('#bulk-action-selector').val() !== '';
+        $('#bulk-action-button').prop('disabled', !(hasSelection && hasAction));
+    };
+    
+    /**
+     * Filter by status (from statistics cards)
+     */
+    this.filterByStatus = function(e) {
+        var status = $(e.currentTarget).data('status');
+        $('#status-filter').val(status);
+        this.applyFilters();
+    };
+    
+    /**
+     * View data details
+     */
+    this.viewData = function(e) {
+        var dataId = $(e.currentTarget).data('id');
+        this.openDataModal(dataId, 'view');
+    };
+    
+    /**
+     * Edit data
+     */
+    this.editData = function(e) {
+        var dataId = $(e.currentTarget).data('id');
+        this.openDataModal(dataId, 'edit');
+    };
+    
+    /**
+     * Open data modal
+     */
+    this.openDataModal = function(dataId, mode) {
+        $('#data-detail-modal').show();
+        $('.tpak-modal-loading').show();
+        $('#modal-content').hide();
+        
+        var requestData = {
+            action: 'tpak_get_data_details',
+            nonce: tpak_admin.nonce,
+            data_id: dataId
+        };
+        
+        $.post(tpak_admin.ajax_url, requestData)
+            .done(function(response) {
+                if (response.success) {
+                    self.populateDataModal(response.data, mode);
+                } else {
+                    self.showError(response.data || tpak_admin.strings.error);
+                    self.closeModal();
+                }
+            })
+            .fail(function() {
+                self.showError(tpak_admin.strings.error);
+                self.closeModal();
+            })
+            .always(function() {
+                $('.tpak-modal-loading').hide();
+                $('#modal-content').show();
+            });
+    };
+    
+    /**
+     * Populate data modal
+     */
+    this.populateDataModal = function(data, mode) {
+        // Populate overview tab
+        $('#detail-survey-id').text(data.survey_id);
+        $('#detail-response-id').text(data.response_id);
+        $('#detail-status').html('<span class="status-badge status-' + 
+                                data.status.replace(/_/g, '-') + '">' + 
+                                data.status + '</span>');
+        $('#detail-assigned-user').text(data.assigned_user || 'Unassigned');
+        
+        // Populate workflow actions
+        this.populateWorkflowActions(data.actions, data.id);
+        
+        // Populate survey data tab
+        this.populateDataTab(data.data, data.can_edit && mode === 'edit');
+        
+        // Populate audit trail tab
+        this.populateAuditTrail(data.audit_trail);
+        
+        // Store current data ID
+        $('#data-detail-modal').data('current-id', data.id);
+    };
+    
+    /**
+     * Populate workflow actions
+     */
+    this.populateWorkflowActions = function(actions, dataId) {
+        var $container = $('#workflow-actions-container');
+        $container.empty();
+        
+        if (Object.keys(actions).length === 0) {
+            $container.html('<p>No actions available for this data.</p>');
+            return;
+        }
+        
+        $.each(actions, function(action, config) {
+            var $button = $('<button type="button" class="button ' + config.class + ' workflow-action" ' +
+                           'data-action="' + action + '" data-id="' + dataId + '">' +
+                           config.label + '</button>');
+            $container.append($button);
+        });
+    };
+    
+    /**
+     * Populate data tab
+     */
+    this.populateDataTab = function(data, canEdit) {
+        var formattedData = JSON.stringify(data, null, 2);
+        
+        $('#data-display').html('<pre>' + this.escapeHtml(formattedData) + '</pre>');
+        $('#data-editor-textarea').val(formattedData);
+        
+        if (canEdit) {
+            $('#edit-data-button').show();
+        } else {
+            $('#edit-data-button').hide();
+        }
+        
+        // Reset editing state
+        $('#data-display').show();
+        $('#data-editor').hide();
+        $('#edit-data-button').show();
+        $('#save-data-button, #cancel-edit-button').hide();
+    };
+    
+    /**
+     * Populate audit trail
+     */
+    this.populateAuditTrail = function(auditTrail) {
+        var $container = $('#audit-trail-container');
+        $container.empty();
+        
+        if (auditTrail.length === 0) {
+            $container.html('<p>No audit trail entries found.</p>');
+            return;
+        }
+        
+        var html = '<div class="audit-trail">';
+        $.each(auditTrail, function(index, entry) {
+            html += '<div class="audit-entry">';
+            html += '<div class="audit-header">';
+            html += '<strong>' + self.escapeHtml(entry.action) + '</strong>';
+            html += ' by ' + self.escapeHtml(entry.user_name);
+            html += ' on ' + self.formatDate(entry.timestamp);
+            html += '</div>';
+            
+            if (entry.notes) {
+                html += '<div class="audit-notes">' + self.escapeHtml(entry.notes) + '</div>';
+            }
+            
+            if (entry.old_value !== null || entry.new_value !== null) {
+                html += '<div class="audit-changes">';
+                if (entry.old_value !== null) {
+                    html += '<div class="old-value">From: ' + self.escapeHtml(JSON.stringify(entry.old_value)) + '</div>';
+                }
+                if (entry.new_value !== null) {
+                    html += '<div class="new-value">To: ' + self.escapeHtml(JSON.stringify(entry.new_value)) + '</div>';
+                }
+                html += '</div>';
+            }
+            
+            html += '</div>';
+        });
+        html += '</div>';
+        
+        $container.html(html);
+    };
+    
+    /**
+     * Switch modal tab
+     */
+    this.switchModalTab = function(e) {
+        e.preventDefault();
+        
+        var $link = $(e.currentTarget);
+        var targetTab = $link.attr('href');
+        
+        // Update tab links
+        $('.tpak-tab-link').removeClass('active');
+        $link.addClass('active');
+        
+        // Update tab content
+        $('.tpak-tab-content').removeClass('active');
+        $(targetTab).addClass('active');
+    };
+    
+    /**
+     * Enable data editing
+     */
+    this.enableDataEditing = function() {
+        $('#data-display').hide();
+        $('#data-editor').show();
+        $('#edit-data-button').hide();
+        $('#save-data-button, #cancel-edit-button').show();
+    };
+    
+    /**
+     * Cancel data editing
+     */
+    this.cancelDataEditing = function() {
+        $('#data-display').show();
+        $('#data-editor').hide();
+        $('#edit-data-button').show();
+        $('#save-data-button, #cancel-edit-button').hide();
+    };
+    
+    /**
+     * Save data changes
+     */
+    this.saveDataChanges = function() {
+        var dataId = $('#data-detail-modal').data('current-id');
+        var newData = $('#data-editor-textarea').val();
+        
+        // Validate JSON
+        try {
+            JSON.parse(newData);
+        } catch (e) {
+            this.showError('Invalid JSON format. Please check your data.');
+            return;
+        }
+        
+        var requestData = {
+            action: 'tpak_update_data',
+            nonce: tpak_admin.nonce,
+            data_id: dataId,
+            survey_data: newData
+        };
+        
+        $('#save-data-button').prop('disabled', true).text('Saving...');
+        
+        $.post(tpak_admin.ajax_url, requestData)
+            .done(function(response) {
+                if (response.success) {
+                    self.showSuccess(response.data.message);
+                    self.cancelDataEditing();
+                    // Refresh the data display
+                    $('#data-display').html('<pre>' + self.escapeHtml(newData) + '</pre>');
+                } else {
+                    self.showError(response.data || tpak_admin.strings.error);
+                }
+            })
+            .fail(function() {
+                self.showError(tpak_admin.strings.error);
+            })
+            .always(function() {
+                $('#save-data-button').prop('disabled', false).text('Save Changes');
+            });
+    };
+    
+    /**
+     * Perform workflow action
+     */
+    this.performWorkflowAction = function(e) {
+        var $button = $(e.currentTarget);
+        var action = $button.data('action');
+        var dataId = $button.data('id');
+        
+        // Show confirmation modal
+        this.showWorkflowConfirmation(action, dataId);
+    };
+    
+    /**
+     * Show workflow confirmation modal
+     */
+    this.showWorkflowConfirmation = function(action, dataId) {
+        var actionLabels = {
+            'approve_to_b': 'approve this data and send it to the Supervisor',
+            'approve_to_c': 'send this data to the Examiner',
+            'finalize_sampling': 'apply the sampling gate to this data',
+            'finalize': 'finalize this data',
+            'reject_to_a': 'reject this data back to the Interviewer',
+            'reject_to_b': 'reject this data back to the Supervisor',
+            'resubmit_to_b': 'resubmit this data to the Supervisor',
+            'resubmit_to_c': 'resubmit this data to the Examiner'
+        };
+        
+        var message = 'Are you sure you want to ' + (actionLabels[action] || 'perform this action') + '?';
+        
+        $('#workflow-confirmation-message').text(message);
+        $('#workflow-notes-input').val('');
+        $('#workflow-action-modal').data('action', action).data('data-id', dataId).show();
+    };
+    
+    /**
+     * Confirm workflow action
+     */
+    this.confirmWorkflowAction = function() {
+        var action = $('#workflow-action-modal').data('action');
+        var dataId = $('#workflow-action-modal').data('data-id');
+        var notes = $('#workflow-notes-input').val();
+        
+        var requestData = {
+            action: 'tpak_perform_workflow_action',
+            nonce: tpak_admin.nonce,
+            data_id: dataId,
+            action: action,
+            notes: notes
+        };
+        
+        $('#confirm-workflow-action').prop('disabled', true).text('Processing...');
+        
+        $.post(tpak_admin.ajax_url, requestData)
+            .done(function(response) {
+                if (response.success) {
+                    self.showSuccess(response.data.message);
+                    self.closeModal();
+                    self.loadData(); // Refresh the table
+                } else {
+                    self.showError(response.data || tpak_admin.strings.error);
+                }
+            })
+            .fail(function() {
+                self.showError(tpak_admin.strings.error);
+            })
+            .always(function() {
+                $('#confirm-workflow-action').prop('disabled', false).text('Confirm');
+            });
+    };
+    
+    /**
+     * Perform bulk action
+     */
+    this.performBulkAction = function() {
+        var action = $('#bulk-action-selector').val();
+        
+        if (!action || this.selectedItems.length === 0) {
+            return;
+        }
+        
+        if (!confirm('Are you sure you want to perform this action on ' + this.selectedItems.length + ' items?')) {
+            return;
+        }
+        
+        var requestData = {
+            action: 'tpak_bulk_action',
+            nonce: tpak_admin.nonce,
+            action: action,
+            data_ids: this.selectedItems
+        };
+        
+        $('#bulk-action-button').prop('disabled', true).text('Processing...');
+        
+        $.post(tpak_admin.ajax_url, requestData)
+            .done(function(response) {
+                if (response.success) {
+                    var message = 'Bulk action completed. Success: ' + response.data.success + 
+                                 ', Failed: ' + response.data.failed;
+                    self.showSuccess(message);
+                    
+                    if (response.data.messages.length > 0) {
+                        console.log('Bulk action messages:', response.data.messages);
+                    }
+                    
+                    self.loadData(); // Refresh the table
+                } else {
+                    self.showError(response.data || tpak_admin.strings.error);
+                }
+            })
+            .fail(function() {
+                self.showError(tpak_admin.strings.error);
+            })
+            .always(function() {
+                $('#bulk-action-button').prop('disabled', false).text('Apply');
+                $('#bulk-action-selector').val('');
+                self.toggleBulkActionButton();
+            });
+    };
+    
+    /**
+     * Close modal
+     */
+    this.closeModal = function() {
+        $('.tpak-modal').hide();
+    };
+    
+    /**
+     * Show error message
+     */
+    this.showError = function(message) {
+        this.showNotice(message, 'error');
+    };
+    
+    /**
+     * Show success message
+     */
+    this.showSuccess = function(message) {
+        this.showNotice(message, 'success');
+    };
+    
+    /**
+     * Show notice
+     */
+    this.showNotice = function(message, type) {
+        type = type || 'info';
+        
+        var $notice = $('<div class="notice notice-' + type + ' is-dismissible">' +
+                       '<p>' + message + '</p>' +
+                       '<button type="button" class="notice-dismiss">' +
+                       '<span class="screen-reader-text">Dismiss this notice.</span>' +
+                       '</button>' +
+                       '</div>');
+        
+        $('.tpak-data-management').prepend($notice);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(function() {
+            $notice.fadeOut();
+        }, 5000);
+    };
+    
+    /**
+     * Escape HTML
+     */
+    this.escapeHtml = function(text) {
+        var map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        
+        return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
+    };
+    
+    /**
+     * Format date
+     */
+    this.formatDate = function(dateString) {
+        if (!dateString) return '';
+        
+        var date = new Date(dateString);
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    };
+    
+    // Initialize on creation
+    this.init();
+}

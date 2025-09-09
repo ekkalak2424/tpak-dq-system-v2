@@ -47,6 +47,9 @@ class TPAK_Test_Runner {
         // Test notification system
         $this->test_notification_system();
         
+        // Test meta boxes
+        $this->test_meta_boxes();
+        
         // Display results
         $this->display_results();
     }
@@ -286,6 +289,143 @@ class TPAK_Test_Runner {
                 $this->pass('Error logging works');
             } else {
                 $this->fail('Error logging failed');
+            }
+            
+        } catch (Exception $e) {
+            $this->fail('Exception: ' . $e->getMessage());
+        }
+        
+        $this->end_test();
+    }
+    
+    /**
+     * Test meta boxes
+     */
+    private function test_meta_boxes() {
+        $this->start_test('Meta Boxes');
+        
+        try {
+            // Test instance creation
+            $meta_boxes = TPAK_Meta_Boxes::get_instance();
+            
+            if ($meta_boxes instanceof TPAK_Meta_Boxes) {
+                $this->pass('Meta boxes instance created successfully');
+            } else {
+                $this->fail('Failed to create meta boxes instance');
+                return;
+            }
+            
+            // Test hook registration
+            $hooks_registered = true;
+            if (!has_action('add_meta_boxes')) {
+                $hooks_registered = false;
+            }
+            if (!has_action('save_post')) {
+                $hooks_registered = false;
+            }
+            if (!has_action('admin_enqueue_scripts')) {
+                $hooks_registered = false;
+            }
+            
+            if ($hooks_registered) {
+                $this->pass('Meta box hooks registered');
+            } else {
+                $this->fail('Meta box hooks not properly registered');
+            }
+            
+            // Create test survey data
+            $test_post_id = wp_insert_post(array(
+                'post_type' => 'tpak_survey_data',
+                'post_title' => 'Test Survey Data for Meta Boxes',
+                'post_status' => 'publish',
+                'meta_input' => array(
+                    '_tpak_survey_id' => 'TEST123',
+                    '_tpak_response_id' => 'RESP456',
+                    '_tpak_survey_data' => wp_json_encode(array(
+                        'question1' => 'Test Answer 1',
+                        'question2' => 'Test Answer 2'
+                    )),
+                    '_tpak_workflow_status' => 'pending_a',
+                    '_tpak_assigned_user' => 1,
+                    '_tpak_audit_trail' => wp_json_encode(array(
+                        array(
+                            'timestamp' => current_time('mysql'),
+                            'user_id' => 1,
+                            'action' => 'imported',
+                            'old_value' => null,
+                            'new_value' => null,
+                            'notes' => 'Test data created'
+                        )
+                    )),
+                    '_tpak_import_date' => current_time('mysql')
+                )
+            ));
+            
+            if ($test_post_id && !is_wp_error($test_post_id)) {
+                $this->pass('Test survey data created');
+                
+                $post = get_post($test_post_id);
+                
+                // Test survey data meta box rendering
+                ob_start();
+                $meta_boxes->render_survey_data_meta_box($post);
+                $survey_output = ob_get_clean();
+                
+                if (strpos($survey_output, 'tpak_survey_id') !== false && 
+                    strpos($survey_output, 'TEST123') !== false) {
+                    $this->pass('Survey data meta box renders correctly');
+                } else {
+                    $this->fail('Survey data meta box rendering failed');
+                }
+                
+                // Test workflow meta box rendering
+                ob_start();
+                $meta_boxes->render_workflow_meta_box($post);
+                $workflow_output = ob_get_clean();
+                
+                if (strpos($workflow_output, 'tpak-status-badge') !== false) {
+                    $this->pass('Workflow meta box renders correctly');
+                } else {
+                    $this->fail('Workflow meta box rendering failed');
+                }
+                
+                // Test audit trail meta box rendering
+                ob_start();
+                $meta_boxes->render_audit_trail_meta_box($post);
+                $audit_output = ob_get_clean();
+                
+                if (strpos($audit_output, 'tpak-audit-entry') !== false) {
+                    $this->pass('Audit trail meta box renders correctly');
+                } else {
+                    $this->fail('Audit trail meta box rendering failed');
+                }
+                
+                // Test JSON validation
+                $reflection = new ReflectionClass($meta_boxes);
+                $validate_method = $reflection->getMethod('validate_survey_data');
+                $validate_method->setAccessible(true);
+                
+                // Valid JSON
+                $valid_result = $validate_method->invoke($meta_boxes, '{"test": "data"}');
+                if (!is_wp_error($valid_result)) {
+                    $this->pass('JSON validation accepts valid JSON');
+                } else {
+                    $this->fail('JSON validation rejects valid JSON');
+                }
+                
+                // Invalid JSON
+                $invalid_result = $validate_method->invoke($meta_boxes, '{"test": }');
+                if (is_wp_error($invalid_result)) {
+                    $this->pass('JSON validation rejects invalid JSON');
+                } else {
+                    $this->fail('JSON validation accepts invalid JSON');
+                }
+                
+                // Clean up
+                wp_delete_post($test_post_id, true);
+                
+            } else {
+                $this->fail('Failed to create test survey data');
             }
             
         } catch (Exception $e) {

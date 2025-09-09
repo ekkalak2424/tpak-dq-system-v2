@@ -13,6 +13,12 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
     exit;
 }
 
+// Load autoloader to access plugin classes
+if (file_exists(__DIR__ . '/includes/class-autoloader.php')) {
+    require_once __DIR__ . '/includes/class-autoloader.php';
+    TPAK_Autoloader::register();
+}
+
 /**
  * TPAK DQ System Uninstaller
  */
@@ -112,18 +118,37 @@ class TPAK_DQ_Uninstaller {
      */
     private static function remove_options() {
         $options = array(
+            // Legacy options
             'tpak_dq_settings',
-            'tpak_dq_cron_settings',
+            'tpak_dq_sampling_percentage',
+            
+            // Current options
             'tpak_dq_activated',
             'tpak_dq_version',
+            'tpak_dq_activation_date',
             'tpak_dq_api_settings',
+            'tpak_dq_cron_settings',
             'tpak_dq_notification_settings',
-            'tpak_dq_sampling_percentage'
+            'tpak_dq_workflow_settings',
+            'tpak_dq_general_settings',
+            
+            // Runtime options
+            'tpak_dq_last_import_date',
+            'tpak_dq_import_status',
+            'tpak_dq_error_count',
+            'tpak_dq_last_error',
         );
         
         foreach ($options as $option) {
             delete_option($option);
         }
+        
+        // Remove any options with our prefix that might have been added dynamically
+        global $wpdb;
+        $wpdb->query($wpdb->prepare("
+            DELETE FROM {$wpdb->options} 
+            WHERE option_name LIKE %s
+        ", 'tpak_dq_%'));
     }
     
     /**
@@ -152,9 +177,35 @@ class TPAK_DQ_Uninstaller {
         // Clear WordPress object cache
         wp_cache_flush();
         
-        // Clear any transients
-        delete_transient('tpak_dq_api_status');
-        delete_transient('tpak_dq_dashboard_stats');
+        // Clear transients
+        $transients = array(
+            'tpak_dq_api_status',
+            'tpak_dq_dashboard_stats',
+            'tpak_dq_user_stats',
+            'tpak_dq_workflow_stats',
+            'tpak_dq_system_status',
+        );
+        
+        foreach ($transients as $transient) {
+            delete_transient($transient);
+        }
+        
+        // Clear any site transients
+        foreach ($transients as $transient) {
+            delete_site_transient($transient);
+        }
+        
+        // Remove any cached data with our prefix
+        global $wpdb;
+        $wpdb->query($wpdb->prepare("
+            DELETE FROM {$wpdb->options} 
+            WHERE option_name LIKE %s OR option_name LIKE %s
+        ", '_transient_tpak_dq_%', '_transient_timeout_tpak_dq_%'));
+        
+        $wpdb->query($wpdb->prepare("
+            DELETE FROM {$wpdb->options} 
+            WHERE option_name LIKE %s OR option_name LIKE %s
+        ", '_site_transient_tpak_dq_%', '_site_transient_timeout_tpak_dq_%'));
     }
 }
 

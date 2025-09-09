@@ -1,0 +1,392 @@
+/**
+ * Dashboard Styles
+ * 
+ * Styles for the TPAK dashboard interface
+ * 
+ * @package TPAK_DQ_System
+ * @since 1.0.0
+ */
+
+/* Dashboard Layout */
+.tpak-dashboard {
+    margin: 20px 0;
+}
+
+.tpak-dashboard-widgets {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+/* Widget Styles */
+.tpak-widget {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 20px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.tpak-widget h3 {
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.tpak-widget h3 .button {
+    margin-left: 10px;
+    padding: 2px 6px;
+    min-height: auto;
+    line-height: 1;
+}
+
+.tpak-widget h3 .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+
+/* Statistics Grid */
+.tpak-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 15px;
+}
+
+.tpak-stat-item {
+    text-align: center;
+    padding: 15px 10px;
+    background: #f6f7f7;
+    border-radius: 4px;
+    border: 1px solid #dcdcde;
+    transition: all 0.2s ease;
+}
+
+.tpak-stat-item:hover {
+    background: #f0f0f1;
+    border-color: #c3c4c7;
+}
+
+.tpak-stat-number {
+    font-size: 24px;
+    font-weight: 600;
+    color: #2271b1;
+    line-height: 1.2;
+    margin-bottom: 5px;
+}
+
+.tpak-stat-label {
+    font-size: 12px;
+    color: #646970;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Loading State */
+.tpak-stats-loading {
+    text-align: center;
+    padding: 20px;
+    color: #646970;
+}
+
+.tpak-stats-loading .spinner {
+    float: none;
+    margin: 0 5px 0 0;
+}
+
+/* Chart Widgets */
+.tpak-chart-widget,
+.tpak-activity-widget {
+    grid-column: span 2;
+}
+
+.tpak-chart-container {
+    position: relative;
+    height: 200px;
+    margin-bottom: 15px;
+}
+
+.tpak-no-data {
+    text-align: center;
+    color: #646970;
+    font-style: italic;
+    padding: 40px 20px;
+    margin: 0;
+}
+
+/* Chart Legend */
+.tpak-chart-legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.tpak-legend-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f6f7f7;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.tpak-legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.tpak-legend-label {
+    flex: 1;
+    color: #1d2327;
+}
+
+.tpak-legend-value {
+    font-weight: 600;
+    color: #2271b1;
+    margin-left: 8px;
+}
+
+/* Performance Metrics */
+.tpak-performance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.tpak-performance-item {
+    padding: 15px;
+    background: #f6f7f7;
+    border-radius: 4px;
+    border-left: 4px solid #2271b1;
+}
+
+.tpak-performance-label {
+    font-size: 12px;
+    color: #646970;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+}
+
+.tpak-performance-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1d2327;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tpak-performance-change {
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+.tpak-performance-change.positive {
+    background: #d1e7dd;
+    color: #0f5132;
+}
+
+.tpak-performance-change.negative {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* System Status */
+.tpak-status-items {
+    display: grid;
+    gap: 10px;
+}
+
+.tpak-status-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    background: #f6f7f7;
+    border-radius: 4px;
+    border-left: 4px solid #dcdcde;
+}
+
+.tpak-status-item.tpak-status-ok {
+    border-left-color: #00a32a;
+}
+
+.tpak-status-item.tpak-status-warning {
+    border-left-color: #dba617;
+}
+
+.tpak-status-item.tpak-status-error {
+    border-left-color: #d63638;
+}
+
+.tpak-status-item .dashicons {
+    margin-right: 8px;
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.tpak-status-item.tpak-status-ok .dashicons {
+    color: #00a32a;
+}
+
+.tpak-status-item.tpak-status-warning .dashicons {
+    color: #dba617;
+}
+
+.tpak-status-item.tpak-status-error .dashicons {
+    color: #d63638;
+}
+
+.tpak-status-label {
+    flex: 1;
+    font-weight: 500;
+    color: #1d2327;
+}
+
+.tpak-status-value {
+    font-weight: 600;
+    color: #646970;
+}
+
+/* Quick Actions */
+.tpak-actions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tpak-actions-list .button {
+    justify-content: center;
+    text-align: center;
+}
+
+/* Welcome Widget */
+.tpak-welcome-widget p {
+    margin: 10px 0;
+    color: #646970;
+}
+
+.tpak-welcome-widget em {
+    font-size: 13px;
+    color: #2271b1;
+}
+
+/* Responsive Design */
+@media screen and (max-width: 1200px) {
+    .tpak-chart-widget,
+    .tpak-activity-widget {
+        grid-column: span 1;
+    }
+}
+
+@media screen and (max-width: 782px) {
+    .tpak-dashboard-widgets {
+        grid-template-columns: 1fr;
+    }
+    
+    .tpak-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .tpak-chart-legend {
+        grid-template-columns: 1fr;
+    }
+    
+    .tpak-performance-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .tpak-stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .tpak-widget {
+        padding: 15px;
+    }
+    
+    .tpak-stat-item {
+        padding: 12px 8px;
+    }
+    
+    .tpak-stat-number {
+        font-size: 20px;
+    }
+}
+
+/* Animation */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.tpak-widget {
+    animation: fadeInUp 0.3s ease-out;
+}
+
+.tpak-stat-item {
+    animation: fadeInUp 0.3s ease-out;
+}
+
+/* Dark mode support (if WordPress adds it) */
+@media (prefers-color-scheme: dark) {
+    .tpak-widget {
+        background: #1d2327;
+        border-color: #3c434a;
+        color: #f0f0f1;
+    }
+    
+    .tpak-widget h3 {
+        color: #f0f0f1;
+    }
+    
+    .tpak-stat-item {
+        background: #2c3338;
+        border-color: #3c434a;
+    }
+    
+    .tpak-stat-item:hover {
+        background: #32373c;
+    }
+    
+    .tpak-stat-label {
+        color: #a7aaad;
+    }
+    
+    .tpak-legend-item,
+    .tpak-performance-item,
+    .tpak-status-item {
+        background: #2c3338;
+    }
+    
+    .tpak-performance-label,
+    .tpak-status-label {
+        color: #a7aaad;
+    }
+    
+    .tpak-performance-value,
+    .tpak-status-value {
+        color: #f0f0f1;
+    }
+}

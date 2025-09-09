@@ -42,6 +42,7 @@ class TPAK_Autoloader {
         
         // Utility classes
         'TPAK_Logger'         => 'includes/class-logger.php',
+        'TPAK_Error_Handler'  => 'includes/class-error-handler.php',
         'TPAK_Survey_Data'    => 'includes/class-survey-data.php',
         'TPAK_Audit_Entry'    => 'includes/class-audit-entry.php',
         'TPAK_Role_Manager'   => 'includes/class-role-manager.php',
@@ -54,6 +55,13 @@ class TPAK_Autoloader {
         
         // Cron utilities
         'TPAK_Cron_Monitor'   => 'includes/class-cron-monitor.php',
+        
+        // Security classes
+        'TPAK_Security'       => 'includes/class-security.php',
+        'TPAK_Security_Middleware' => 'includes/class-security-middleware.php',
+        
+        // Dashboard classes
+        'TPAK_Dashboard_Stats' => 'includes/class-dashboard-stats.php',
     );
     
     /**

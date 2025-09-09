@@ -151,6 +151,20 @@ class TPAK_Admin_Menu {
             $this->menu_pages['users'] = $users_hook;
         }
         
+        // System Logs - only for administrators
+        if (current_user_can('tpak_manage_settings')) {
+            $logs_hook = add_submenu_page(
+                'tpak-dashboard',
+                __('System Logs', 'tpak-dq-system'),
+                __('System Logs', 'tpak-dq-system'),
+                'tpak_manage_settings',
+                'tpak-logs',
+                array($this, 'render_logs_page')
+            );
+            
+            $this->menu_pages['logs'] = $logs_hook;
+        }
+        
         // System Status - only for administrators
         if (current_user_can('tpak_manage_settings')) {
             $status_hook = add_submenu_page(
@@ -195,6 +209,7 @@ class TPAK_Admin_Menu {
             'tpak-settings'      => 'tpak_manage_settings',
             'tpak-import-export' => 'tpak_import_data',
             'tpak-users'         => 'tpak_manage_users',
+            'tpak-logs'          => 'tpak_manage_settings',
             'tpak-status'        => 'tpak_manage_settings',
         );
         
@@ -221,7 +236,7 @@ class TPAK_Admin_Menu {
         wp_enqueue_style('common');
         wp_enqueue_style('forms');
         
-        // Enqueue custom admin styles (will be created in later tasks)
+        // Enqueue custom admin styles
         wp_enqueue_style(
             'tpak-admin-style',
             plugin_dir_url(dirname(__FILE__)) . 'assets/css/admin.css',
@@ -229,11 +244,32 @@ class TPAK_Admin_Menu {
             '1.0.0'
         );
         
+        // Enqueue dashboard-specific styles for dashboard page
+        if ($hook === $this->menu_pages['dashboard']) {
+            wp_enqueue_style(
+                'tpak-dashboard-style',
+                plugin_dir_url(dirname(__FILE__)) . 'assets/css/dashboard.css',
+                array('tpak-admin-style'),
+                '1.0.0'
+            );
+        }
+        
         // Enqueue admin scripts
         wp_enqueue_script('jquery');
         wp_enqueue_script('wp-util');
         
-        // Enqueue custom admin scripts (will be created in later tasks)
+        // Enqueue Chart.js for dashboard charts
+        if ($hook === $this->menu_pages['dashboard'] && current_user_can('tpak_view_admin_stats')) {
+            wp_enqueue_script(
+                'chartjs',
+                'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js',
+                array(),
+                '3.9.1',
+                true
+            );
+        }
+        
+        // Enqueue custom admin scripts
         wp_enqueue_script(
             'tpak-admin-script',
             plugin_dir_url(dirname(__FILE__)) . 'assets/js/admin.js',
@@ -241,6 +277,17 @@ class TPAK_Admin_Menu {
             '1.0.0',
             true
         );
+        
+        // Enqueue dashboard-specific scripts for dashboard page
+        if ($hook === $this->menu_pages['dashboard']) {
+            wp_enqueue_script(
+                'tpak-dashboard-script',
+                plugin_dir_url(dirname(__FILE__)) . 'assets/js/dashboard.js',
+                array('jquery', 'wp-util', 'tpak-admin-script'),
+                '1.0.0',
+                true
+            );
+        }
         
         // Localize script for AJAX
         wp_localize_script('tpak-admin-script', 'tpak_admin', array(
@@ -266,6 +313,8 @@ class TPAK_Admin_Menu {
      * Render data management page
      */
     public function render_data_page() {
+        // Initialize data management class
+        TPAK_Admin_Data::get_instance();
         $this->render_admin_page('data', __('Data Management', 'tpak-dq-system'));
     }
     
@@ -288,6 +337,13 @@ class TPAK_Admin_Menu {
      */
     public function render_users_page() {
         $this->render_admin_page('users', __('User Management', 'tpak-dq-system'));
+    }
+    
+    /**
+     * Render logs page
+     */
+    public function render_logs_page() {
+        $this->render_admin_page('logs', __('System Logs', 'tpak-dq-system'));
     }
     
     /**

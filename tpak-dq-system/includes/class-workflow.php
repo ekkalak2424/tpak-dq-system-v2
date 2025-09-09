@@ -453,7 +453,7 @@ class TPAK_Workflow {
         
         // Get parameters
         $post_id = absint($_POST['post_id'] ?? 0);
-        $action = sanitize_text_field($_POST['action'] ?? '');
+        $action = sanitize_text_field($_POST['workflow_action'] ?? '');
         $notes = sanitize_textarea_field($_POST['notes'] ?? '');
         
         if (!$post_id || !$action) {
@@ -726,5 +726,187 @@ class TPAK_Workflow {
         }
         
         return $logs;
+    }
+}   
+ /**
+     * Perform workflow action on survey data
+     * 
+     * @param TPAK_Survey_Data $survey_data
+     * @param string           $action
+     * @param string           $notes
+     * @return bool|WP_Error
+     */
+    public function perform_action($survey_data, $action, $notes = '') {
+        if (!$survey_data instanceof TPAK_Survey_Data) {
+            return new WP_Error('invalid_data', __('Invalid survey data object.', 'tpak-dq-system'));
+        }
+        
+        $current_status = $survey_data->get_status();
+        $new_status = $this->get_new_status_for_action($current_status, $action);
+        
+        if (is_wp_error($new_status)) {
+            return $new_status;
+        }
+        
+        // Check user permissions
+        if (!$this->can_user_perform_action(get_current_user_id(), $current_status, $action)) {
+            return new WP_Error('permission_denied', __('You do not have permission to perform this action.', 'tpak-dq-system'));
+        }
+        
+        // Apply sampling gate if needed
+        if ($action === 'finalize_sampling') {
+            $new_status = $this->apply_sampling_gate($survey_data);
+        }
+        
+        // Update status
+        $survey_data->set_status($new_status);
+        
+        // Add audit entry
+        $survey_data->add_audit_entry($action, $current_status, $new_status, $notes);
+        
+        // Save changes
+        $result = $survey_data->save();
+        
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        
+        // Trigger notifications
+        do_action('tpak_workflow_action_performed', $survey_data, $action, $current_status, $new_status);
+        
+        return true;
+    }
+    
+    /**
+     * Perform bulk workflow action
+     * 
+     * @param TPAK_Survey_Data $survey_data
+     * @param string           $action
+     * @return bool|WP_Error
+     */
+    public function perform_bulk_action($survey_data, $action) {
+        // Map bulk actions to regular actions
+        $action_map = array(
+            'bulk_approve_to_b' => 'approve_to_b',
+            'bulk_approve_to_c' => 'approve_to_c',
+            'bulk_apply_sampling' => 'finalize_sampling',
+            'bulk_finalize' => 'finalize',
+        );
+        
+        if (!isset($action_map[$action])) {
+            return new WP_Error('invalid_action', __('Invalid bulk action.', 'tpak-dq-system'));
+        }
+        
+        return $this->perform_action($survey_data, $action_map[$action], 'Bulk action performed');
+    }
+    
+    /**
+     * Get new status for action
+     * 
+     * @param string $current_status
+     * @param string $action
+     * @return string|WP_Error
+     */
+    private function get_new_status_for_action($current_status, $action) {
+        $transitions = array(
+            'pending_a' => array(
+                'approve_to_b' => 'pending_b',
+            ),
+            'pending_b' => array(
+                'approve_to_c' => 'pending_c',
+                'finalize_sampling' => 'finalized_by_sampling', // Will be overridden by sampling logic
+                'reject_to_a' => 'rejected_by_b',
+            ),
+            'pending_c' => array(
+                'finalize' => 'finalized',
+                'reject_to_b' => 'rejected_by_c',
+            ),
+            'rejected_by_b' => array(
+                'resubmit_to_b' => 'pending_b',
+            ),
+            'rejected_by_c' => array(
+                'resubmit_to_c' => 'pending_c',
+            ),
+        );
+        
+        if (!isset($transitions[$current_status][$action])) {
+            return new WP_Error('invalid_transition', __('Invalid workflow transition.', 'tpak-dq-system'));
+        }
+        
+        return $transitions[$current_status][$action];
+    }
+    
+    /**
+     * Check if user can perform action
+     * 
+     * @param int    $user_id
+     * @param string $status
+     * @param string $action
+     * @return bool
+     */
+    private function can_user_perform_action($user_id, $status, $action) {
+        $user = get_user_by('id', $user_id);
+        
+        if (!$user) {
+            return false;
+        }
+        
+        // Administrators can perform any action
+        if (in_array('administrator', $user->roles)) {
+            return true;
+        }
+        
+        // Check role-based permissions
+        $permissions = array(
+            'pending_a' => array(
+                'approve_to_b' => array('tpak_interviewer_a'),
+            ),
+            'pending_b' => array(
+                'approve_to_c' => array('tpak_supervisor_b'),
+                'finalize_sampling' => array('tpak_supervisor_b'),
+                'reject_to_a' => array('tpak_supervisor_b'),
+            ),
+            'pending_c' => array(
+                'finalize' => array('tpak_examiner_c'),
+                'reject_to_b' => array('tpak_examiner_c'),
+            ),
+            'rejected_by_b' => array(
+                'resubmit_to_b' => array('tpak_interviewer_a'),
+            ),
+            'rejected_by_c' => array(
+                'resubmit_to_c' => array('tpak_supervisor_b'),
+            ),
+        );
+        
+        if (!isset($permissions[$status][$action])) {
+            return false;
+        }
+        
+        $allowed_roles = $permissions[$status][$action];
+        return !empty(array_intersect($user->roles, $allowed_roles));
+    }
+    
+    /**
+     * Apply sampling gate logic
+     * 
+     * @param TPAK_Survey_Data $survey_data
+     * @return string
+     */
+    private function apply_sampling_gate($survey_data) {
+        // Get sampling percentage from settings
+        $settings = get_option('tpak_dq_settings', array());
+        $sampling_percentage = isset($settings['sampling_percentage']) ? intval($settings['sampling_percentage']) : 30;
+        
+        // Generate random number (1-100)
+        $random = wp_rand(1, 100);
+        
+        // If random number is within sampling percentage, send to examiner
+        if ($random <= $sampling_percentage) {
+            $survey_data->add_audit_entry('sampling_gate', null, 'pending_c', "Sampling gate: {$random}% <= {$sampling_percentage}% - sent to examiner");
+            return 'pending_c';
+        } else {
+            $survey_data->add_audit_entry('sampling_gate', null, 'finalized_by_sampling', "Sampling gate: {$random}% > {$sampling_percentage}% - automatically finalized");
+            return 'finalized_by_sampling';
+        }
     }
 }

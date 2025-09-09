@@ -59,6 +59,7 @@ class TPAK_Admin_Settings {
         add_action('wp_ajax_tpak_test_api_connection', array($this, 'ajax_test_api_connection'));
         add_action('wp_ajax_tpak_manual_import', array($this, 'ajax_manual_import'));
         add_action('admin_init', array($this, 'register_settings'));
+        add_action('admin_post_tpak_save_settings', array($this, 'handle_settings_save_secure'));
     }
     
     /**
@@ -149,36 +150,56 @@ class TPAK_Admin_Settings {
     }
     
     /**
-     * Handle settings save
+     * Handle settings save with security middleware
      */
-    public function handle_settings_save() {
-        // Verify nonce
-        if (!wp_verify_nonce($_POST['tpak_settings_nonce'], 'tpak_save_settings')) {
-            wp_die(__('Security check failed. Please try again.', 'tpak-dq-system'));
-        }
+    public function handle_settings_save_secure() {
+        $sanitization_rules = array(
+            'active_tab' => array('type' => 'text', 'max_length' => 20),
+            'limesurvey_url' => array('type' => 'url'),
+            'api_username' => array('type' => 'text', 'max_length' => 100),
+            'api_password' => array('type' => 'text', 'max_length' => 255),
+            'survey_id' => array('type' => 'int', 'min' => 1),
+            'connection_timeout' => array('type' => 'int', 'min' => 5, 'max' => 300),
+            'import_interval' => array('type' => 'text', 'max_length' => 20),
+            'cron_survey_id' => array('type' => 'int', 'min' => 1),
+            'import_limit' => array('type' => 'int', 'min' => 1, 'max' => 1000),
+            'retry_attempts' => array('type' => 'int', 'min' => 0, 'max' => 10),
+            'notification_emails' => array('type' => 'textarea', 'max_length' => 1000),
+            'email_template' => array('type' => 'text', 'max_length' => 50),
+            'sampling_percentage' => array('type' => 'int', 'min' => 1, 'max' => 100),
+            'audit_retention_days' => array('type' => 'int', 'min' => 1, 'max' => 3650)
+        );
         
-        // Check permissions
-        if (!current_user_can('tpak_manage_settings')) {
-            wp_die(__('You do not have sufficient permissions to save settings.', 'tpak-dq-system'));
-        }
+        TPAK_Security_Middleware::secure_form_submission(
+            TPAK_Security::NONCE_SETTINGS,
+            'manage_tpak_settings',
+            array($this, 'handle_settings_save'),
+            $sanitization_rules
+        );
+    }
+
+    /**
+     * Handle settings save (called by middleware)
+     */
+    public function handle_settings_save($sanitized_data) {
         
-        $tab = sanitize_text_field($_POST['active_tab']);
+        $tab = $sanitized_data['active_tab'];
         $validator = TPAK_Validator::get_instance();
         $success = false;
         $message = '';
         
         switch ($tab) {
             case 'api':
-                $success = $this->save_api_settings($_POST, $validator);
+                $success = $this->save_api_settings($sanitized_data, $validator);
                 break;
             case 'cron':
-                $success = $this->save_cron_settings($_POST, $validator);
+                $success = $this->save_cron_settings($sanitized_data, $validator);
                 break;
             case 'notifications':
-                $success = $this->save_notifications_settings($_POST, $validator);
+                $success = $this->save_notifications_settings($sanitized_data, $validator);
                 break;
             case 'workflow':
-                $success = $this->save_workflow_settings($_POST, $validator);
+                $success = $this->save_workflow_settings($sanitized_data, $validator);
                 break;
         }
         
@@ -399,7 +420,96 @@ class TPAK_Admin_Settings {
         }
         
         return $sanitized;
-    }    
+    }
+    
+    /**
+     * AJAX handler for testing API connection
+     */
+    public function ajax_test_api_connection() {
+        TPAK_Security_Middleware::secure_ajax_action(
+            'manage_tpak_settings',
+            array($this, 'test_api_connection_handler')
+        );
+    }
+    
+    /**
+     * Test API connection handler
+     */
+    public function test_api_connection_handler() {
+        $url = TPAK_Security::sanitize_url($_POST['url'] ?? '');
+        $username = TPAK_Security::sanitize_text($_POST['username'] ?? '');
+        $password = TPAK_Security::sanitize_text($_POST['password'] ?? '');
+        $survey_id = TPAK_Security::sanitize_int($_POST['survey_id'] ?? 0);
+        
+        if (empty($url) || empty($username) || empty($password) || !$survey_id) {
+            wp_send_json_error(array('message' => __('All fields are required for testing.', 'tpak-dq-system')));
+        }
+        
+        // Rate limiting for API tests
+        if (!TPAK_Security::check_rate_limit('api_test', 5, 300)) {
+            wp_send_json_error(array('message' => __('Too many test attempts. Please wait before trying again.', 'tpak-dq-system')));
+        }
+        
+        try {
+            $api_handler = new TPAK_API_Handler();
+            $result = $api_handler->test_connection($url, $username, $password, $survey_id);
+            
+            // Update test results
+            $api_settings = $this->get_settings('api');
+            $api_settings['last_test_result'] = $result['success'] ? 'Success' : $result['message'];
+            $api_settings['last_test_date'] = current_time('mysql');
+            $this->update_settings('api', $api_settings);
+            
+            if ($result['success']) {
+                wp_send_json_success(array(
+                    'message' => __('API connection successful!', 'tpak-dq-system'),
+                    'details' => $result['details'] ?? ''
+                ));
+            } else {
+                wp_send_json_error(array('message' => $result['message']));
+            }
+        } catch (Exception $e) {
+            TPAK_Security::log_security_event('api_test_error', $e->getMessage());
+            wp_send_json_error(array('message' => __('Connection test failed: ', 'tpak-dq-system') . $e->getMessage()));
+        }
+    }
+    
+    /**
+     * AJAX handler for manual import
+     */
+    public function ajax_manual_import() {
+        TPAK_Security_Middleware::secure_ajax_action(
+            'manage_tpak_settings',
+            array($this, 'manual_import_handler')
+        );
+    }
+    
+    /**
+     * Manual import handler
+     */
+    public function manual_import_handler() {
+        // Rate limiting for manual imports
+        if (!TPAK_Security::check_rate_limit('manual_import', 3, 600)) {
+            wp_send_json_error(array('message' => __('Too many import attempts. Please wait before trying again.', 'tpak-dq-system')));
+        }
+        
+        try {
+            $cron = TPAK_Cron::get_instance();
+            $result = $cron->execute_import();
+            
+            if ($result['success']) {
+                wp_send_json_success(array(
+                    'message' => sprintf(__('Import completed successfully. %d records processed.', 'tpak-dq-system'), $result['count']),
+                    'details' => $result
+                ));
+            } else {
+                wp_send_json_error(array('message' => $result['message']));
+            }
+        } catch (Exception $e) {
+            TPAK_Security::log_security_event('manual_import_error', $e->getMessage());
+            wp_send_json_error(array('message' => __('Import failed: ', 'tpak-dq-system') . $e->getMessage()));
+        }
+    }
 
     /**
      * Render API settings tab
@@ -409,8 +519,9 @@ class TPAK_Admin_Settings {
     public function render_api_settings_tab($settings) {
         $api_settings = $settings['api'];
         ?>
-        <form method="post" action="">
-            <?php wp_nonce_field('tpak_save_settings', 'tpak_settings_nonce'); ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <?php wp_nonce_field(TPAK_Security::NONCE_SETTINGS, '_wpnonce'); ?>
+            <input type="hidden" name="action" value="tpak_save_settings">
             <input type="hidden" name="active_tab" value="api">
             
             <div class="tpak-settings-section">
